@@ -1,3 +1,6 @@
 .env
 credentials.json
 token.json
+.env
+token.json
+credentials.json
