@@ -1,30 +1,24 @@
 import webbrowser
-from datetime import datetime
+from app.services.google_calendar import add_event as google_add_event
+from app.services.google_calendar import get_events as google_get_events
 
 # -------- GOOGLE --------
 def open_google():
     webbrowser.open("https://www.google.com")
-    return "Opened Google"
+    return {"status": "success", "message": "Opened Google"}
 
 def search_google(query: str):
     url = f"https://www.google.com/search?q={query}"
     webbrowser.open(url)
-    return f"Searched Google for: {query}"
+    return {"status": "success", "message": f"Searched Google for: {query}"}
 
-
-# -------- CALENDAR (TEMP SIMPLE VERSION) --------
-calendar_events = []
-
+# -------- CALENDAR --------
 def add_event(title: str, time: str):
-    event = {
-        "title": title,
-        "time": time
-    }
-    calendar_events.append(event)
-    return f"Event '{title}' added at {time}"
+    # Temporary mapping from your old tool schema
+    return google_add_event(
+        title=title,
+        start_time=time,
+    )
 
 def get_events():
-    if not calendar_events:
-        return "No events found"
-
-    return "\n".join([f"{e['title']} at {e['time']}" for e in calendar_events])
+    return google_get_events()

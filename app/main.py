@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
-
+from app.services.ai import run_agent 
 load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -29,10 +29,5 @@ def chat(data: dict):
     if not messages:
         return {"reply": "No messages received."}
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages
-    )
-
-    reply = response.choices[0].message.content
+    reply = run_agent(messages)
     return {"reply": reply}

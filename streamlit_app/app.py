@@ -1,111 +1,162 @@
-import streamlit as st  # Streamlit = frontend UI framework
-import requests         # requests = send HTTP requests to  FastAPI backend
+import streamlit as st
+import requests
+from todo_tab import render_todo_tab
 
-# Configure the page (title + icon in browser tab)
-st.set_page_config(page_title="AI Assistant", page_icon="🤖")
+st.set_page_config(
+    page_title="DOC Assistant",
+    page_icon="🤖👩🏻‍⚕️",
+    layout="wide"
+)
 
-# App title
-st.title("🤖 AI Assistant")
+# ---------- Custom CSS ----------
+st.markdown("""
+<style>
+/* Main app background */
+.stApp {
+    background: linear-gradient(135deg, #fdf2f8, #fce7f3, #ede9fe);
+    color: #2d1b3d;
+}
 
+/* Main container */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    max-width: 1100px;
+}
 
-# ---------------------------------------------------
-# INIT MEMORY (ONLY RUNS ONCE)
-# ---------------------------------------------------
-# This initializes conversation memory using Streamlit session state.
-# Think of it as storing chat history for this user session.
-#
-# The "system" message is like instructions for the AI (its behavior/rules).
-#
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "system",
-            "content": """
-You are an AI assistant with access to tools.
+/* Title styling */
+.main-title {
+    text-align: center;
+    font-size: 3rem;
+    font-weight: 800;
+    color: #7c3aed;
+    margin-bottom: 0.3rem;
+}
 
-Rules:
-- Use tools when needed
-- You can call multiple tools
-- Do not guess when tools are available
-"""
-        }
-    ]
+.sub-title {
+    text-align: center;
+    font-size: 1.1rem;
+    color: #6b7280;
+    margin-bottom: 2rem;
+}
 
+/* Tabs styling */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 10px;
+    background-color: rgba(255, 255, 255, 0.35);
+    padding: 10px;
+    border-radius: 16px;
+}
 
-# ---------------------------------------------------
-# DISPLAY CHAT HISTORY
-# ---------------------------------------------------
-# This loops through all stored messages and displays them in the UI.
-#
-# st.chat_message(role) creates a chat bubble (user or assistant).
-# st.write(content) prints the message inside the bubble.
-#
-for msg in st.session_state.messages:
-    if msg["role"] != "system":  # don't show system message to user
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+.stTabs [data-baseweb="tab"] {
+    height: 50px;
+    border-radius: 12px;
+    padding: 10px 22px;
+    background-color: white;
+    color: #6d28d9;
+    font-weight: 600;
+    border: 1px solid #e9d5ff;
+}
 
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(90deg, #c084fc, #f472b6);
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
 
-# ---------------------------------------------------
-# USER INPUT
-# ---------------------------------------------------
-# chat_input creates a chat box (like ChatGPT input)
-user_input = st.chat_input("Ask something...")
+/* Chat message style */
+[data-testid="stChatMessage"] {
+    background: rgba(255, 255, 255, 0.78);
+    border-radius: 18px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    border: 1px solid #f3e8ff;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+}
 
-# If user typed something
-if user_input:
+/* Chat input */
+[data-testid="stChatInput"] {
+    border-radius: 16px;
+}
 
-    # Save user message in memory
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
+/* General input boxes */
+.stTextInput > div > div > input,
+.stTextArea textarea {
+    border-radius: 12px !important;
+    border: 1px solid #d8b4fe !important;
+    background-color: #ffffff !important;
+    color: #2d1b3d !important;
+}
 
-    # Display user message immediately
-    with st.chat_message("user"):
-        st.write(user_input)
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(90deg, #a855f7, #ec4899);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+}
 
-    # ---------------------------------------------------
-    # SEND FULL MEMORY TO BACKEND
-    # ---------------------------------------------------
-    # requests.post(...) sends an HTTP request to your FastAPI server.
-    #
-    # "http://localhost:8000/chat"
-    # → This is your endpoint (running locally).
-    #
-    # json={...}
-    # → This sends data as JSON to the backend.
-    #
-    # IMPORTANT:
-    # We send the FULL conversation (not just the last message)
-    # so the AI has memory/context.
-    #
-    response = requests.post(
-        "http://localhost:8000/chat",
-        json={"messages": st.session_state.messages}
-    )
+.stButton > button:hover {
+    opacity: 0.92;
+}
 
-    # ---------------------------------------------------
-    # HANDLE BACKEND RESPONSE
-    # ---------------------------------------------------
-    # response.status_code == 200 means:
-    # Request succeeded (HTTP OK)
-    #
-    if response.status_code == 200:
+/* Error box */
+.stAlert {
+    border-radius: 14px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-        # response.json() converts backend response into Python dict
-        reply = response.json()["reply"]
+# ---------- Header ----------
+st.markdown('<div class="main-title">🤖👩🏻‍⚕️ DOC Assistant 💅🏼</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Your cute and helpful medical assistant workspace</div>', unsafe_allow_html=True)
 
-        # Save assistant response in memory
+assistant_tab, todo_tab = st.tabs(["🤖 Assistant", "✅ Daily To-Do"])
+
+with assistant_tab:
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for msg in st.session_state.messages:
+        if msg["role"] != "system":
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+
+    user_input = st.chat_input("Ask something...")
+
+    if user_input:
         st.session_state.messages.append({
-            "role": "assistant",
-            "content": reply
+            "role": "user",
+            "content": user_input
         })
 
-        # Display assistant response
-        with st.chat_message("assistant"):
-            st.write(reply)
+        with st.chat_message("user"):
+            st.write(user_input)
 
-    else:
-        # If backend fails (server down, error, etc.)
-        st.error("Error connecting to API")
+        try:
+            response = requests.post(
+                "http://localhost:8000/chat",
+                json={"messages": st.session_state.messages},
+                timeout=60
+            )
+
+            if response.status_code == 200:
+                reply = response.json()["reply"]
+
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": reply
+                })
+
+                with st.chat_message("assistant"):
+                    st.write(reply)
+            else:
+                st.error(f"Error from API: {response.status_code}")
+
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error connecting to API: {e}")
+
+with todo_tab:
+    render_todo_tab()
