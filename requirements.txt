@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy
+aiosqlite
+pydantic
+pydantic-settings
+passlib
+bcrypt
+PyJWT
+openai
+python-dotenv
+streamlit
+requests

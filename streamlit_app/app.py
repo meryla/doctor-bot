@@ -4,7 +4,7 @@ from todo_tab import render_todo_tab
 
 st.set_page_config(
     page_title="DOC Assistant",
-    page_icon="🤖👩🏻‍⚕️",
+    page_icon="🤖",
     layout="wide"
 )
 
@@ -109,54 +109,112 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+API_URL = "http://localhost:8000"
+
+# ---------- Initialize Session State ----------
+if "token" not in st.session_state:
+    st.session_state.token = None
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# ---------- Sidebar Authentication ----------
+with st.sidebar:
+    st.header("🔐 Account")
+    
+    if st.session_state.token is None:
+        auth_mode = st.radio("Mode", ["Login", "Sign Up"])
+        
+        username = st.text_input("Email / Username")
+        password = st.text_input("Password", type="password")
+        
+        if auth_mode == "Sign Up":
+            if st.button("Register"):
+                res = requests.post(f"{API_URL}/auth/register", json={"email": username, "password": password})
+                if res.status_code == 200:
+                    st.success("Account created! Please log in.")
+                else:
+                    st.error(res.json().get("detail", "Registration failed"))
+        else:
+            if st.button("Log In"):
+                res = requests.post(f"{API_URL}/auth/token", data={"username": username, "password": password})
+                if res.status_code == 200:
+                    st.session_state.token = res.json()["access_token"]
+                    st.success("Logged in successfully!")
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials")
+    else:
+        st.success("Connected!")
+        if st.button("Log Out"):
+            st.session_state.token = None
+            st.session_state.messages = []
+            st.rerun()
+            
+        st.markdown("---")
+        st.subheader("📅 Integrations")
+        if st.button("Connect Google Calendar"):
+            headers = {"Authorization": f"Bearer {st.session_state.token}"}
+            res = requests.get(f"{API_URL}/auth/google/login", headers=headers)
+            if res.status_code == 200:
+                auth_url = res.json().get("url")
+                st.markdown(f"[Click here to authorize Google Calendar]({auth_url})", unsafe_allow_html=True)
+
 # ---------- Header ----------
-st.markdown('<div class="main-title">🤖👩🏻‍⚕️ DOC Assistant 💅🏼</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🤖 DOC Assistant </div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Your cute and helpful medical assistant workspace</div>', unsafe_allow_html=True)
 
 assistant_tab, todo_tab = st.tabs(["🤖 Assistant", "✅ Daily To-Do"])
 
 with assistant_tab:
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    if st.session_state.token is None:
+        st.info("👈 Please log in or sign up using the sidebar to start chatting with DOC Assistant.")
+    else:
+        for msg in st.session_state.messages:
+            if msg["role"] != "system":
+                with st.chat_message(msg["role"]):
+                    st.write(msg["content"])
 
-    for msg in st.session_state.messages:
-        if msg["role"] != "system":
-            with st.chat_message(msg["role"]):
-                st.write(msg["content"])
+        user_input = st.chat_input("Ask something...")
 
-    user_input = st.chat_input("Ask something...")
+        if user_input:
+            st.session_state.messages.append({
+                "role": "user",
+                "content": user_input
+            })
 
-    if user_input:
-        st.session_state.messages.append({
-            "role": "user",
-            "content": user_input
-        })
+            with st.chat_message("user"):
+                st.write(user_input)
 
-        with st.chat_message("user"):
-            st.write(user_input)
+            try:
+                # Attach the JWT token in headers for FastAPI
+                headers = {"Authorization": f"Bearer {st.session_state.token}"}
+                response = requests.post(
+                    f"{API_URL}/chat",
+                    json={"messages": st.session_state.messages},
+                    headers=headers,
+                    timeout=60
+                )
 
-        try:
-            response = requests.post(
-                "http://localhost:8000/chat",
-                json={"messages": st.session_state.messages},
-                timeout=60
-            )
+                if response.status_code == 200:
+                    reply = response.json()["reply"]
 
-            if response.status_code == 200:
-                reply = response.json()["reply"]
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": reply
+                    })
 
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": reply
-                })
+                    with st.chat_message("assistant"):
+                        st.write(reply)
+                elif response.status_code == 401:
+                    st.error("Session expired. Please log in again.")
+                    st.session_state.token = None
+                    st.rerun()
+                else:
+                    st.error(f"Error from API: {response.status_code} - {response.text}")
 
-                with st.chat_message("assistant"):
-                    st.write(reply)
-            else:
-                st.error(f"Error from API: {response.status_code}")
-
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error connecting to API: {e}")
+            except requests.exceptions.RequestException as e:
+                st.error(f"Error connecting to API: {e}")
 
 with todo_tab:
     render_todo_tab()

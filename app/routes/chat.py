@@ -1,43 +1,40 @@
-from fastapi import APIRouter  # FastAPI router to define endpoints
-from app.services.ai import run_agent  # your agent logic
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_user, get_db
+from app.db.models import User, CalendarCredential
+from app.services.ai import run_agent  # votre logique d'agent
 
 router = APIRouter()
 
-
 @router.post("/chat")
-async def chat_endpoint(data: dict):
+async def chat_endpoint(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
-    This endpoint receives the FULL conversation from Streamlit,
-    runs the AI agent, and returns the assistant's reply.
+    Cet endpoint reçoit toute la conversation depuis Streamlit,
+    récupère les identifiants Google Calendar de l'utilisateur connecté,
+    exécute l'agent IA et renvoie la réponse de l'assistant.
     """
 
     # ---------------------------------------------------
-    # RECEIVE MESSAGES FROM FRONTEND
+    # RECEVOIR LES MESSAGES DU FRONTEND
     # ---------------------------------------------------
-    # data is the JSON sent by Streamlit:
-    # { "messages": [...] }
-    #
-    # We extract the full conversation history here.
-    #
     messages = data["messages"]
 
     # ---------------------------------------------------
-    # IMPORTANT NOTE
+    # RÉCUPÉRER LES CREDENTIALS DU CALENDRIER DE L'UTILISATEUR
     # ---------------------------------------------------
-    # We DO NOT recreate messages here anymore.
-    # The system message + history already comes from Streamlit.
-    #
-    # This keeps memory across the conversation.
-    #
+    creds_record = await db.get(CalendarCredential, current_user.id)
 
     # ---------------------------------------------------
-    # RUN AGENT (TOOLS + MULTI-STEP REASONING)
+    # LNCER L'AGENT (AVEC LES CREDENTIALS)
     # ---------------------------------------------------
-    reply = run_agent(messages)
+    reply = run_agent(messages=messages, creds_record=creds_record)
 
     # ---------------------------------------------------
-    # RETURN RESPONSE TO FRONTEND
+    # RENVOYER LA RÉPONSE AU FRONTEND
     # ---------------------------------------------------
-    # FastAPI automatically converts this dict → JSON
-    #
     return {"reply": reply}

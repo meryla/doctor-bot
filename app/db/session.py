@@ -18,7 +18,6 @@ AsyncSessionLocal = async_sessionmaker(
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     FastAPI dependency. Use it in a route like:
-
         @router.get("/habits")
         async def list_habits(db: AsyncSession = Depends(get_db)):
             ...

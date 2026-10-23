@@ -17,6 +17,9 @@ class User(Base):
     habits: Mapped[list["Habit"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     meal_logs: Mapped[list["MealLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    calendar_credential: Mapped["CalendarCredential | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class Habit(Base):
@@ -77,6 +80,19 @@ class MealLog(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="meal_logs")
+
+
+class CalendarCredential(Base):
+    __tablename__ = "calendar_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+
+    access_token: Mapped[str]
+    refresh_token: Mapped[str]
+    token_expiry: Mapped[datetime]
+
+    user: Mapped["User"] = relationship(back_populates="calendar_credential")
 
 
 class Conversation(Base):

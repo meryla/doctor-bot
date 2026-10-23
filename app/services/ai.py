@@ -3,6 +3,7 @@ import json
 from dotenv import load_dotenv
 from openai import OpenAI
 from app.services import tools as tool_functions
+from app.db.models import CalendarCredential
 
 load_dotenv()
 
@@ -70,7 +71,7 @@ tools = [
                     },
                     "time": {
                         "type": "string",
-                        "description": "Date and time of the event."
+                        "description": "Date and time of the event in ISO format."
                     }
                 },
                 "required": ["title", "time"]
@@ -91,7 +92,7 @@ tools = [
 ]
 
 
-def handle_tool_call(tool_call):
+def handle_tool_call(tool_call, creds_record: CalendarCredential | None = None):
     name = tool_call.function.name
 
     try:
@@ -106,15 +107,19 @@ def handle_tool_call(tool_call):
         return tool_functions.search_google(**args)
 
     elif name == "add_event":
-        return tool_functions.add_event(**args)
+        if not creds_record:
+            return {"error": "Google Calendar is not connected for this user."}
+        return tool_functions.add_event(record=creds_record, **args)
 
     elif name == "get_events":
-        return tool_functions.get_events()
+        if not creds_record:
+            return {"error": "Google Calendar is not connected for this user."}
+        return tool_functions.get_events(record=creds_record)
 
     return {"error": f"Unknown tool: {name}"}
 
 
-def run_agent(messages, max_steps=5):
+def run_agent(messages, creds_record: CalendarCredential | None = None, max_steps=5):
     working_messages = [SYSTEM_PROMPT] + messages.copy()
 
     for step in range(max_steps):
@@ -151,7 +156,7 @@ def run_agent(messages, max_steps=5):
         if msg.tool_calls:
             for tool_call in msg.tool_calls:
                 print(f"Using tool: {tool_call.function.name}")
-                result = handle_tool_call(tool_call)
+                result = handle_tool_call(tool_call, creds_record=creds_record)
 
                 working_messages.append({
                     "role": "tool",
